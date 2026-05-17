@@ -1,0 +1,423 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <title>流体热对流模拟 (松散自然版)</title>
+    <style>
+        body {
+            margin: 0;
+            background-color: #1a1a1a;
+            color: #e2e8f0;
+            font-family: 'PingFang SC', 'Microsoft YaHei', sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            overflow: hidden;
+            user-select: none;
+        }
+
+        #app-container {
+            display: flex;
+            flex-direction: column;
+            width: 850px;
+            height: 650px;
+            background: #18181b;
+            border-radius: 12px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.6);
+            border: 1px solid #3f3f46;
+            overflow: hidden;
+        }
+
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 15px 25px;
+            background: #27272a;
+            border-bottom: 1px solid #3f3f46;
+            flex-shrink: 0;
+        }
+
+        h1 {
+            margin: 0;
+            font-size: 18px;
+            font-weight: 500;
+            letter-spacing: 1px;
+            color: #f8fafc;
+        }
+
+        .stats {
+            display: flex;
+            gap: 25px;
+            font-size: 13px;
+            color: #a1a1aa;
+        }
+
+        .stat-item {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
+        }
+
+        .stat-value {
+            font-size: 16px;
+            color: #fff;
+            font-family: monospace;
+            margin-top: 4px;
+            font-weight: bold;
+        }
+
+        #canvas-wrapper {
+            position: relative;
+            flex-grow: 1;
+            width: 100%;
+            background: #0f0f12;
+            border-left: 15px solid #18181b;
+            border-right: 15px solid #18181b;
+            box-sizing: border-box;
+        }
+
+        #canvas-inner-border {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            right: 10px;
+            bottom: 10px;
+            border: 2px solid #3f3f46;
+            pointer-events: none;
+            z-index: 5;
+        }
+
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+
+        .label {
+            position: absolute;
+            left: 50%;
+            transform: translateX(-50%);
+            padding: 4px 16px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: bold;
+            border: 1px solid;
+            z-index: 10;
+            pointer-events: none;
+        }
+
+        .label.cooling {
+            top: 30px;
+            color: #93c5fd;
+            border-color: #3b82f6;
+            background: rgba(59, 130, 246, 0.15);
+        }
+
+        .label.heating {
+            bottom: 25px;
+            color: #fca5a5;
+            border-color: #ef4444;
+            background: rgba(239, 68, 68, 0.15);
+        }
+
+        .controls {
+            display: flex;
+            align-items: center;
+            padding: 20px 25px;
+            background: #27272a;
+            border-top: 1px solid #3f3f46;
+            gap: 20px;
+            flex-shrink: 0;
+        }
+
+        .controls label {
+            font-size: 15px;
+            color: #d4d4d8;
+            font-weight: bold;
+        }
+
+        input[type=range] {
+            flex-grow: 1;
+            height: 6px;
+            border-radius: 3px;
+            outline: none;
+            appearance: none;
+            background: #52525b;
+            cursor: pointer;
+        }
+
+        input[type=range]::-webkit-slider-thumb {
+            appearance: none;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: #93c5fd;
+            box-shadow: 0 0 10px rgba(147, 197, 253, 0.5);
+            border: 3px solid #1e40af;
+            transition: transform 0.1s;
+        }
+
+        input[type=range]::-webkit-slider-thumb:hover {
+            transform: scale(1.2);
+        }
+
+        .val-box {
+            background: #18181b;
+            padding: 6px 15px;
+            border-radius: 8px;
+            font-family: monospace;
+            color: #fff;
+            font-size: 16px;
+            border: 1px solid #3f3f46;
+            min-width: 30px;
+            text-align: center;
+        }
+
+        button {
+            background: #3f3f46;
+            color: #f8fafc;
+            border: 1px solid #52525b;
+            padding: 10px 25px;
+            border-radius: 8px;
+            font-size: 15px;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-family: inherit;
+            font-weight: bold;
+            flex-shrink: 0;
+        }
+
+        button:hover {
+            background: #52525b;
+            border-color: #71717a;
+        }
+
+        button:active {
+            transform: scale(0.95);
+        }
+    </style>
+</head>
+
+<body>
+
+    <div id="app-container">
+        <header>
+            <h1>流体热对流模拟</h1>
+            <div class="stats">
+                <div class="stat-item">
+                    <span>平均温度</span>
+                    <span class="stat-value" id="avg-temp">20.0° C</span>
+                </div>
+                <div class="stat-item">
+                    <span>热源强度</span>
+                    <span class="stat-value" id="heat-intensity">77%</span>
+                </div>
+                <div class="stat-item">
+                    <span>粒子总数</span>
+                    <span class="stat-value" id="particle-count">350</span>
+                </div>
+            </div>
+        </header>
+
+        <div id="canvas-wrapper">
+            <div id="canvas-inner-border"></div>
+            <div class="label cooling">冷却层 (海面/散热)</div>
+            <div class="label heating">低压上升区</div>
+            <canvas id="simCanvas"></canvas>
+        </div>
+
+        <div class="controls">
+            <label>底层水温 (海面温度)</label>
+            <input type="range" id="heat-slider" min="0" max="100" value="77">
+            <div class="val-box" id="slider-val">77</div>
+            <button id="reset-btn">重置模拟</button>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('simCanvas');
+        const ctx = canvas.getContext('2d');
+
+        const avgTempDisplay = document.getElementById('avg-temp');
+        const countDisplay = document.getElementById('particle-count');
+        const intensityDisplay = document.getElementById('heat-intensity');
+        const heatSlider = document.getElementById('heat-slider');
+        const sliderValDisplay = document.getElementById('slider-val');
+        const resetBtn = document.getElementById('reset-btn');
+
+        function resizeCanvas() {
+            const wrapper = document.getElementById('canvas-wrapper');
+            canvas.width = wrapper.clientWidth - 30;
+            canvas.height = wrapper.clientHeight;
+        }
+        resizeCanvas();
+        window.addEventListener('resize', resizeCanvas);
+
+        const NUM_PARTICLES = 350;
+        let currentHeatPercentage = parseInt(heatSlider.value);
+        countDisplay.innerText = NUM_PARTICLES;
+
+        heatSlider.addEventListener('input', (e) => {
+            currentHeatPercentage = parseInt(e.target.value);
+            sliderValDisplay.innerText = currentHeatPercentage;
+            intensityDisplay.innerText = currentHeatPercentage + '%';
+        });
+
+        resetBtn.addEventListener('click', () => {
+            heatSlider.value = 0;
+            currentHeatPercentage = 0;
+            sliderValDisplay.innerText = '0';
+            intensityDisplay.innerText = '0%';
+            initParticles();
+        });
+
+        class Particle {
+            constructor() {
+                this.x = Math.random() * canvas.width;
+                this.y = Math.random() * canvas.height;
+                this.vx = (Math.random() - 0.5) * 2;
+                this.vy = (Math.random() - 0.5) * 2;
+                this.radius = Math.random() * 2.5 + 2.5;
+                this.temp = 20;
+            }
+
+            update(heatPower) {
+                const width = canvas.width;
+                const height = canvas.height;
+
+                // ---- 1. 热交换系统 ----
+                let distFromCenter = Math.abs(this.x - width / 2);
+
+                // 底部宽泛加热区 (扩大加热范围)
+                if (this.y > height - 160 && distFromCenter < 200) {
+                    this.temp += heatPower * 3.5;
+                }
+
+                if (this.y < 160) {
+                    this.temp -= 5.0;
+                }
+
+                this.temp += (20 - this.temp) * 0.005;
+                this.temp = Math.max(20, Math.min(this.temp, 100));
+
+                // ---- 2. 垂直受力：重力 VS 浮力 ----
+                let buoyancy = (this.temp - 20) * 0.005;
+                let gravity = 0.08;
+                this.vy += (gravity - buoyancy);
+
+                // ---- 3. 强制环流轨道（松散版推拽力） ----
+
+                // A. 顶部散开：提早散开，并且散得更开
+                if (this.y < 250) {
+                    let pushDir = this.x < width / 2 ? -1 : 1;
+                    this.vx += pushDir * 0.08 * heatPower;
+                }
+
+                // B. 底部回流：减弱吸力，避免全部挤在中间
+                if (this.y > height - 150 && this.temp < 36 && heatPower > 0.1) {
+                    // 只有距离中心大于 60 像素时才往中间吸，防止死磕中心点
+                    if (distFromCenter > 60) {
+                        let pullDir = this.x < width / 2 ? 1 : -1;
+                        this.vx += pullDir * 0.05 * heatPower;
+                    }
+                }
+
+                // C. 【新增机制】防止中心过度拥挤的排斥力
+                // 如果粒子离中心点太近，稍微给一点排斥力推开，形成柱状上升而不是点状上升
+                if (this.y > height - 200 && distFromCenter < 30 && heatPower > 0.1) {
+                    let repelDir = this.x < width / 2 ? -1 : 1;
+                    this.vx += repelDir * 0.06 * heatPower;
+                }
+
+                // ---- 4. 摩擦阻力与随机布朗运动 ----
+                // 降低摩擦阻尼，让流体更顺滑飘逸 (0.95 -> 0.96)
+                this.vx *= 0.96;
+                this.vy *= 0.96;
+
+                // 增大布朗运动，让粒子随机抖动更强烈，制造“透气感”
+                this.vx += (Math.random() - 0.5) * 0.8 * heatPower;
+                this.vy += (Math.random() - 0.5) * 0.8 * heatPower;
+
+                this.x += this.vx;
+                this.y += this.vy;
+
+                // ---- 5. 边界碰撞 ----
+                if (this.x < 15) { this.x = 15; this.vx *= -0.5; }
+                if (this.x > width - 15) { this.x = width - 15; this.vx *= -0.5; }
+                if (this.y < 15) { this.y = 15; this.vy *= -0.5; }
+                if (this.y > height - 15) { this.y = height - 15; this.vy *= -0.2; }
+            }
+
+            draw(ctx) {
+                let r, g, b;
+                if (this.temp <= 30) {
+                    r = 59; g = 130; b = 246;
+                } else if (this.temp < 60) {
+                    let ratio = (this.temp - 30) / 30;
+                    r = 59 + ratio * (147 - 59);
+                    g = 130 + ratio * (197 - 130);
+                    b = 246 + ratio * (253 - 246);
+                } else if (this.temp < 80) {
+                    let ratio = (this.temp - 60) / 20;
+                    r = 147 + ratio * (255 - 147);
+                    g = 197 + ratio * (255 - 197);
+                    b = 253 + ratio * (255 - 253);
+                } else {
+                    let ratio = Math.min(1, (this.temp - 80) / 20);
+                    r = 255;
+                    g = 255 - ratio * (255 - 165);
+                    b = 255 - ratio * (255 - 165);
+                }
+
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+                ctx.fillStyle = `rgb(${r},${g},${b})`;
+                ctx.fill();
+            }
+        }
+
+        let particles = [];
+        function initParticles() {
+            particles = [];
+            for (let i = 0; i < NUM_PARTICLES; i++) {
+                particles.push(new Particle());
+            }
+        }
+        initParticles();
+
+        function animate() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            let heatPower = currentHeatPercentage / 100;
+
+            if (heatPower > 0) {
+                let glowOpacity = heatPower * 0.2;
+                let gradient = ctx.createRadialGradient(canvas.width / 2, canvas.height, 0, canvas.width / 2, canvas.height, 200);
+                gradient.addColorStop(0, `rgba(239, 68, 68, ${glowOpacity})`);
+                gradient.addColorStop(1, 'rgba(239, 68, 68, 0)');
+                ctx.fillStyle = gradient;
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+            }
+
+            let totalTemp = 0;
+
+            particles.forEach(p => {
+                p.update(heatPower);
+                p.draw(ctx);
+                totalTemp += p.temp;
+            });
+
+            let avgTemp = totalTemp / NUM_PARTICLES;
+            avgTempDisplay.innerText = avgTemp.toFixed(1) + '° C';
+
+            requestAnimationFrame(animate);
+        }
+
+        animate();
+    </script>
+</body>
+
+</html>
